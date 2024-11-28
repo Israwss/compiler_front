@@ -5,13 +5,11 @@ import {
   Box,
   Button,
   Typography,
+  CircularProgress,
+  Alert,
   Accordion,
   AccordionSummary,
   AccordionDetails,
-  List,
-  ListItem,
-  ListItemText,
-  Alert,
 } from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import { styled } from "@mui/system";
@@ -55,6 +53,9 @@ export default function Home() {
   const [code, setCode] = useState("");
   const [clicked, setClicked] = useState(false);
   const [lineNumbers, setLineNumbers] = useState(["1"]);
+  const [loading, setLoading] = useState(false);
+  const [results, setResults] = useState(null);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     const lines = code.split("\n").length;
@@ -77,7 +78,40 @@ export default function Home() {
     }
   };
 
-  
+  const handleSubmitCode = async () => {
+    setClicked(true);
+    setLoading(true);
+    setError(null);
+    setResults(null);
+
+    try {
+      const response = await fetch("http://localhost:8000/compile/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setResults(data.details);
+        console.log(data);
+      } else {
+        setError(data.detail || "Ocurrió un error al procesar el código.");
+      }
+    } catch (err) {
+      setError("No se pudo conectar con el servidor.");
+    } finally {
+      setLoading(false);
+      setClicked(false);
+    }
+  };
+
+
+  console.log(results?.execution_result?.program_output);
+
+
+
   return (
     <div style={{ padding: "20px" }}>
       <Typography variant="h4">Compilador de Código C</Typography>
@@ -112,12 +146,86 @@ export default function Home() {
           color="primary"
           clicked={clicked ? 1 : 0}
           onClick={handleSubmitCode}
+          disabled={loading}
         >
-          Enviar Código
+          {loading ? <CircularProgress size={24} color="inherit" /> : "Enviar Código"}
         </AnimatedButton>
       </Box>
 
-      
+      <Box mt={3}>
+        {error && (
+          <Alert severity="error" onClose={() => setError(null)}>
+            {error}
+          </Alert>
+        )}
+
+        {results && (
+          <Box>
+            {results.syntax_passed && (
+              <Typography variant="h6" style={{ color: "green" }}>
+                Análisis sintáctico pasado
+              </Typography>
+            )}
+
+            {results.semantic_errors?.length > 0 && (
+              <Alert severity="error">
+                <Typography variant="h6">Errores Semánticos:</Typography>
+                <ul>
+                  {results.semantic_errors.map((err, index) => (
+                    <li key={index}>{err}</li>
+                  ))}
+                </ul>
+              </Alert>
+            )}
+
+            {results.syntax_passed && results.semantic_errors?.length === 0 && (
+              <>
+                <Accordion>
+                  <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                    <Typography>Funciones</Typography>
+                  </AccordionSummary>
+                  <AccordionDetails>
+                    <pre>{JSON.stringify(results.functions, null, 2)}</pre>
+                  </AccordionDetails>
+                </Accordion>
+
+                <Accordion>
+                  <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                    <Typography>Símbolos</Typography>
+                  </AccordionSummary>
+                  <AccordionDetails>
+                    <pre>{JSON.stringify(results.symbols, null, 2)}</pre>
+                  </AccordionDetails>
+                </Accordion>
+
+
+
+
+
+
+
+
+
+
+                <Accordion>
+  <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+    <Typography>Programa Analizado</Typography>
+  </AccordionSummary>
+  <AccordionDetails>
+    <pre>
+      {results?.execution_result?.program_output || "No hay datos para mostrar."}
+    </pre>
+  </AccordionDetails>
+</Accordion>
+
+
+              </>
+            )}
+          </Box>
+        )}
+      </Box>
     </div>
   );
 }
+
+
